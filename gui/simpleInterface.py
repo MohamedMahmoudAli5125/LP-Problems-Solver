@@ -169,6 +169,13 @@ class SimpleInterface(ctk.CTk):
 
             self.print_model_summary()
             self.status_label.configure(text="Data extracted successfully!", text_color="green")
+            from src.standardizer import Standardizer 
+            
+            standardizer = Standardizer(self.model)
+            std_output = standardizer.standardize()
+            
+            self.print_standardized_results(std_output)
+            self.status_label.configure(text="Standardization complete! Check console for details.", text_color="green")
             
         except ValueError:
             self.status_label.configure(text="Error: Please ensure all coefficients are numbers.", text_color="red")
@@ -181,3 +188,10 @@ class SimpleInterface(ctk.CTk):
         for i in range(len(self.model.constraints_matrix)):
             print(f"  {self.model.constraints_matrix[i]} {self.model.operators[i]} {self.model.rhs_list[i]}")
         print(f"Variable Types: {self.model.var_types}")
+    def print_standardized_results(self, out):
+        print("\n=== STANDARDIZED TABLEAU DATA ===")
+        print(f"Metadata: {out.col_metaData}")
+        print(f"Matrix A:\n{out.A}")
+        print(f"RHS (b): {out.b}")
+        print(f"Phase 1 Obj: {out.phase1_obj}")
+        print(f"Phase 2 Obj: {out.phase2_obj}")
