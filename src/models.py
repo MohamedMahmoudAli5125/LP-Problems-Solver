@@ -18,7 +18,6 @@ class LPProblemModel:
 #         self.obj_value = 0.0  
 #input to solver function will be an instance of this class, which will contain the standardized tableau data for both phases (with small changes for phase 2 if phase 1 succeeds). 
 class StandardizerOutput:
-    
     def __init__(self, A, b, phase1_obj , phase2_obj, col_metaData , objetive):
         self.A = A
         self.b = b
