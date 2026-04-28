@@ -14,116 +14,36 @@ class SimplexSolver:
 
 
     def solve(self):
-        has_artificials = np.any(self.std_output.phase1_obj > 0)
-        tableau,basis = self.build_tableau(has_artificials)
+        has_artificials = np.any(self.std_output.phase1_obj == 1)
+        tableau, basis = self._build_tableau(has_artificials)
         self.steps.append(tableau.copy())
 
-        # print(tableau)
-        # print(self.std_output.phase1_obj)
-
         if has_artificials:
-            art_indices = np.where(self.std_output.phase1_obj == 1)[0]
-            for column in art_indices:
-                #find the row where artificial variables = -1 
-                row = np.where(tableau[:-1,column] == 1)[0][0]
-                #pivot and emove the artificial variable from the basis
-                tableau[-1] += tableau[row]
-
-            # print("after pivoting out artificials")
-            # print(tableau)
-        
-            self.steps.append(tableau.copy())
-            
-            while True:
-                entering_column =self.get_entering_variable(tableau)
-                if entering_column == -1:
-                    break
-                
-                leaving_row = self.get_leaving_variable(tableau, entering_column)
-                if leaving_row == -1:
-                    self.status = "infeasible"
-                    return 
-                
-                tableau = pivot(tableau, leaving_row, entering_column)
-                self.steps.append(tableau.copy())
-                
-            #feasibility check 
-            if abs(tableau[-1][-1])>1e-5:
-                self.status = "infeasible"
+            tableau, basis = self._run_phase1(tableau, basis)
+            if self.status == "infeasible":
                 return
             
-            #phase 2 transition
-            #rew=move the bottom row
-            tableau = tableau[:-1,:]
-            # print(tableau)
-            # print(self.std_output.phase2_obj)
-            
+            tableau, basis = self._transition_to_phase2(tableau, basis)
 
-            
-            #each constraint row to find the basic variables
-            for r in range(len(tableau)-1):
-                for c in range(len(tableau[0])-1):
-                    #basic variable will have 1 at this row and 0 anywhere else 
-                    if tableau[r,c] == 1 and np.count_nonzero(tableau[:-1,c]) ==1:
-                        multiplier = tableau[-1,c]
-                        if multiplier !=0:
-                            tableau[-1] -= multiplier*tableau[r]
-                        break
-            #remove the artificial coulmn 
-            tableau = np.delete(tableau,art_indices,axis=1)
-            self.steps.append(tableau.copy())
-
-            c = np.array(self.std_output.phase2_obj, dtype=float)
-            z_row = np.hstack((-c, np.zeros(1)))
-            tableau = np.vstack((tableau, z_row))
-
-        # print("starting phase 2")
-        # print(tableau)
-
-        # clrearing z reduced cost 
-        # in basic feasible solution, the reduced cost of non-basic variables is the same as their original cost, and the reduced cost of basic variables is zero. So we can clear the z row by subtracting the appropriate multiple of each constraint row from it.
-        for r in range(len(tableau)-1):
-            for c in range(len(tableau[0])-1):
-                if tableau[r,c] == 1 and np.count_nonzero(tableau[:-1,c]) == 1:
-                    multiplier = tableau[-1,c]
-                    if multiplier !=0:
-                        tableau[-1] -= multiplier*tableau[r]
-                    break
-
-        # # print last row (z row) after clearing
-        # print("after clearing z row")
-        # print(tableau)
-            
-        while True:
-            entering_column = self.get_entering_variable(tableau)
-            if entering_column ==-1:
-                self.status = "Optimal"
-                break
-            
-            leaving_row = self.get_leaving_variable(tableau,entering_column)
-            if leaving_row ==-1:
-                self.status = "Unbounded"
-                return 
-            
-            tableau = pivot (tableau,leaving_row,entering_column)
-            self.steps.append(tableau.copy())
+        self._run_phase2(tableau, basis)
             
         #solution
         if self.status =="Optimal":
             output_value = tableau[-1,-1]
             if self.model.obj_type.lower() =="max":
                 output_value =-output_value
-            self.solution["objective_value"]= output_value
+            self.solution["objective_value"] = float(output_value)
             
             if has_artificials:
+                art_indices = np.where(self.std_output.phase1_obj == 1)[0]
                 final_metadata = [m for i , m in enumerate(self.std_output.col_metaData) if i not in art_indices]
-            else :
+            else:
                 final_metadata=self.std_output.col_metaData
                 
             for c , var_name in enumerate(final_metadata):
-                if np.count_nonzero(tableau[:-1,c]) == 1 and np.max(tableau[:-1,c]) ==1:
-                    row = np.where(tableau[:-1,c]==1)[0][0]
-                    self.solution[var_name] = tableau[row,-1]
+                if np.count_nonzero(tableau[:-1,c]) == 1 and np.max(tableau[:-1,c]) == 1:
+                    row = np.where(tableau[:-1,c] == 1)[0][0]
+                    self.solution[var_name] = float(tableau[row,-1])
                 else:
                     self.solution[var_name] = 0.0
                     
@@ -131,31 +51,93 @@ class SimplexSolver:
                 if self.model.var_types[i] =="Unrestricted":
                     pos_val = self.solution.get(f"x{i+1}+",0)
                     neg_val = self.solution.get(f"x{i+1}-",0)
-                    self.solution[f"x{i+1}"] = pos_val - neg_val
-                    
+                    self.solution[f"x{i+1}"] = float(pos_val - neg_val)
+
+    def _run_phase1(self, tableau, basis):
+        tableau = self._setup_objective(tableau, basis)
+        self.steps.append(tableau.copy())
+        
+        # run simplex iterations for phase 1
+        while True:
+            entering_column =self._get_entering_variable(tableau)
+            if entering_column == -1:
+                break
+            
+            leaving_row = self._get_leaving_variable(tableau, entering_column)
+            if leaving_row == -1:
+                self.status = "infeasible"
+                return
+            
+            tableau = pivot(tableau, leaving_row, entering_column)
+            basis[leaving_row] = entering_column
+
+            self.steps.append(np.round(tableau.copy(), decimals=10))
+            
+        # feasibility check 
+        if abs(tableau[-1][-1])>1e-5:
+            self.status = "infeasible"
+            return
+        
+        return tableau, basis
+    
+    def _transition_to_phase2(self, tableau, basis):
+        art_indices = np.where(self.std_output.phase1_obj == 1)[0]
+
+        # remove the bottom row
+        tableau = tableau[:-1,:]
+
+        # remove the artificial columns
+        tableau = np.delete(tableau,art_indices,axis=1)
+
+        # append real objective row
+        c = np.array(self.std_output.phase2_obj, dtype=float)
+        z_row = np.hstack((-c, np.zeros(1)))
+        tableau = np.vstack((tableau, z_row))
+
+        tableau = self._setup_objective(tableau, basis)
+        self.steps.append(tableau.copy())
+
+        return tableau, basis
+
+    def _run_phase2(self, tableau, basis):
+        self.steps.append(tableau.copy())
+
+        while True:
+            entering_column = self._get_entering_variable(tableau)
+            if entering_column == -1:
+                self.status = "Optimal"
+                break
+            
+            leaving_row = self._get_leaving_variable(tableau,entering_column)
+            if leaving_row == -1:
+                self.status = "Unbounded"
+                return 
+            
+            tableau = pivot (tableau,leaving_row,entering_column)
+            basis[leaving_row] = entering_column
+
+            self.steps.append(np.round(tableau.copy(), decimals=10))
+
 
     # Build the initial tableau for the standard simplex method
-    def build_tableau(self, has_artificials):
+    def _build_tableau(self, has_artificials):
         A = np.array(self.std_output.A, dtype=float)
         b = np.array(self.std_output.b, dtype=float).reshape(-1, 1)
+
         if has_artificials:
             c = np.array(self.std_output.phase1_obj, dtype=float)
         else:
             c = np.array(self.std_output.phase2_obj, dtype=float)
-        n_cons = len(A)
-        n_vars = self.model.num_vars
 
-        # slacks = np.eye(n_cons)
-        # add zero to the z row
         z_row = np.hstack((-c, np.zeros(1)))
         tableau = np.hstack((A, b))
         tableau = np.vstack((tableau, z_row))
-        basis   = list(range(n_vars, n_vars + n_cons))
+        basis   = list(self.std_output.initial_basis)
 
         return tableau, basis
 
     # Determination of the entering variable
-    def get_entering_variable(self, tableau):
+    def _get_entering_variable(self, tableau):
         objective_type = self.model.obj_type.lower()
         entering_col = -1
         z_row = tableau[-1, :-1] # RHS excluded
@@ -172,7 +154,7 @@ class SimplexSolver:
         return entering_col
 
     # Determination of the leaving variable
-    def get_leaving_variable(self, tableau, entering_col):
+    def _get_leaving_variable(self, tableau, entering_col):
         min_ratio = float('inf')
         leaving_row = -1
 
@@ -185,6 +167,14 @@ class SimplexSolver:
                     leaving_row = r
 
         return leaving_row
+    
+    # clear basic variables from Z row
+    def _setup_objective(self, tableau, basis):
+        for row, col in enumerate(basis):
+            multiplier = tableau[-1, col]
+            if multiplier != 0:
+                tableau[-1] -= multiplier * tableau[row]
+        return tableau
         
 
 #test
