@@ -3,15 +3,105 @@ from .utils import pivot
 from .models import LPProblemModel, StandardTableau
 
 class SimplexSolver:
-    def __init__(self, model: LPProblemModel):
+    def __init__(self, model: LPProblemModel, std_output):
         self.model = model
+        self.std_output = std_output
         self.status = None # Status of the solution (optimal, infeasible)
         self.steps = [] # Tableau at each iteration
         self.solution = {} # The optimal objective function value and variable values
 
 
     def solve(self):
-        pass
+        tableau,basis = self.build_tableau()
+        self.steps.append(tableau.copy())
+        
+        has_artificials = np.any(self.std_output.phase1_obj>0)
+        
+        if has_artificials:
+            art_indices = np.where(self.std_output.phase1_obj == 1)[0]
+            for column in art_indices:
+                #find the row where artificial variables = -1 
+                row = np.where(tableau[:-2,column]==1)[0][0]
+                #pivot and emove the artificial variable from the basis
+                tableau[-1]-= tableau[row]
+        
+            self.steps.append(tableau.copy())
+            
+            while True:
+                entering_column =self.get_entering_variable(tableau[-1],"min")
+                if entering_column == -1:
+                    break
+                
+                leaving_row = self.get_leaving_variable(tableau, entering_column)
+                if leaving_row == -1:
+                    self.status = "infeasible"
+                    return 
+                
+                tableau = pivot(tableau, leaving_row, entering_column)
+                self.steps.append(tableau.copy())
+                
+            #feasibility check 
+            if abs(tableau[-1][-1])>1e-5:
+                self.status = "infeasible"
+                return
+            
+            #phase 2 transition
+            #rew=move the bottom row
+            tableau = tableau[:-1,:]
+            
+            #each constraint row to find the basic variables
+            for r in range(len(tableau)-1):
+                for c in range(len(tableau[0])-1):
+                    #basic variable will have 1 at this row and 0 anywhere else 
+                    if tableau[r,c] ==1 and np.count_nonzero(tableau[:-1,c]) ==1:
+                        multiplier = tableau[-1,c]
+                        if multiplier !=0:
+                            tableau[-1] -=multiplier*tableau[r]
+                        break
+            #remove the artificial coulmn 
+            tableau =np.delete(tableau,art_indices,axis=1)
+            self.steps.append(tableau.copy())
+            
+        while True:
+            
+            entering_column = self.get_entering_variable(tableau[-1],self.model.obj_type)
+            if entering_column ==-1:
+                self.status = "Optimal"
+                break
+            
+            leaving_row = self.get_leaving_variable(tableau,entering_column)
+            if leaving_row ==-1:
+                self.status = "Unbounded"
+                return 
+            
+            tableau = pivot (tableau,leaving_row,entering_column)
+            self.steps.append(tableau.copy())
+            
+        #solution
+        if self.status =="Optimal":
+            output_value = tableau[-1,-1]
+            if self.model.obj_type.lower() =="max":
+                output_value =-output_value
+            self.solution["objective_value"]= output_value
+            
+            if has_artificials:
+                final_metadata = [m for i , m in enumerate(self.std_output.col_metaData) if i not in art_indices]
+            else :
+                final_metadata=self.std_output.col_metaData
+                
+            for c , var_name in enumerate(final_metadata):
+                if np.count_nonzero(tableau[:-1,c]) == 1 and np.max(tableau[:-1,c]) ==1:
+                    row = np.where(tableau[:-1,c]==1)[0][0]
+                    self.solution[var_name] = tableau[row,-1]
+                else:
+                    self.solution[var_name] = 0.0
+                    
+            for i in range(self.model.num_vars):
+                if self.model.var_types[i] =="Unrestricted":
+                    pos_val = self.solution.get(f"x{i+1}+",0)
+                    neg_val = self.solution.get(f"x{i+1}-",0)
+                    self.solution[f"x{i+1}"] = pos_val - neg_val
+                    
 
     # Build the initial tableau for the standard simplex method
     def build_tableau(self):
