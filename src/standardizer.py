@@ -33,6 +33,7 @@ class Standardizer:
         phase2_obj = np.zeros(total_cols - artificial_cols)
         col_metaData = []  
         var_mapping = []
+        initial_basis = []
         
         
         current_col = 0
@@ -88,23 +89,26 @@ class Standardizer:
             if op == "≤":          
                 A[j, current_slack_ptr] = 1
                 col_metaData.append( f"s{j+1}") 
+                initial_basis.append(current_slack_ptr)
                 current_slack_ptr += 1
         
             elif op == "≥":
-               A[j, current_slack_ptr] = -1 
-               col_metaData.append( f"s{j+1}")
-               current_slack_ptr += 1
-        
-               A[j, current_art_ptr] = 1   
-               phase1_obj[current_art_ptr] = 1 # only artificial variables in phase 1 obj
-               col_metaData.append( f"a{j+1}")
-               current_art_ptr += 1
+                A[j, current_slack_ptr] = -1 
+                col_metaData.append( f"s{j+1}")
+                current_slack_ptr += 1
+
+                A[j, current_art_ptr] = 1   
+                phase1_obj[current_art_ptr] = 1 # only artificial variables in phase 1 obj
+                col_metaData.append( f"a{j+1}")
+                initial_basis.append(current_art_ptr)
+                current_art_ptr += 1
         
             elif op == "=":
-               A[j, current_art_ptr] = 1   
-               phase1_obj[current_art_ptr] = 1 # only artificial variables in phase 1 obj
-               col_metaData.append( f"a{j+1}")
-               current_art_ptr += 1
+                A[j, current_art_ptr] = 1   
+                phase1_obj[current_art_ptr] = 1 # only artificial variables in phase 1 obj
+                col_metaData.append( f"a{j+1}")
+                initial_basis.append(current_art_ptr)
+                current_art_ptr += 1
            
         #so to know what is the models now 
         # A is the tableu for phase 1 without the objective row, b is the rhs vector
@@ -114,6 +118,6 @@ class Standardizer:
         # objective type  
         # the determination of whether the obj coefficients will be made positive or negative will be handeled in another function in the solver depending on the objective type (max or min) , 
         # Standardizer's role is just to prepare the tableau data in a consistent format, and the solver will handle the logic of how to use that data based on the objective type.
-        return StandardizerOutput(A, b, phase1_obj, phase2_obj, col_metaData, self.model.obj_type)
+        return StandardizerOutput(A, b, phase1_obj, phase2_obj, col_metaData, self.model.obj_type, initial_basis)
     
     
