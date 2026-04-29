@@ -24,9 +24,11 @@ class InputFrame(ctk.CTkScrollableFrame):
         self.status_label = ctk.CTkLabel(self, text="", text_color="red")
         self.status_label.pack(pady=5)
 
-        self.obj_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.obj_frame.pack(pady=20)
-        
+        self.obj_scroll = ctk.CTkScrollableFrame(self, orientation="horizontal", height=50, fg_color="transparent")
+        self.obj_scroll.pack(pady=10, fill="x")
+        self.obj_frame = ctk.CTkFrame(self.obj_scroll, fg_color="transparent")
+        self.obj_frame.pack(side="left")
+
         self.constraints_label = ctk.CTkLabel(self, text="Constraints:")
         self.constraints_label.pack_forget() 
 
@@ -37,8 +39,8 @@ class InputFrame(ctk.CTkScrollableFrame):
         self.addConstraints_button.pack(pady=10)
 
         self.bounds_label = ctk.CTkLabel(self, text="Variable Bounds:", font=("Arial", 14, "bold"))
-        self.bounds_frame = ctk.CTkFrame(self, fg_color="transparent")
-        
+        self.bounds_frame = ctk.CTkScrollableFrame(self, orientation="horizontal", height=50, fg_color="transparent")
+
         self.solve_button = ctk.CTkButton(self, text="Solve & Print Model", 
                                          fg_color="green", hover_color="darkgreen",
                                          command=self.extract_data_to_model)
@@ -63,8 +65,10 @@ class InputFrame(ctk.CTkScrollableFrame):
         self.var_type_widgets = []
         self.bounds_label.pack(pady=(20, 5))
         self.bounds_frame.pack(pady=5, fill="x")
+        inner = ctk.CTkFrame(self.bounds_frame, fg_color="transparent")
+        inner.pack(side="left")
         for i in range(self.num_vars):
-            container = ctk.CTkFrame(self.bounds_frame, fg_color="transparent")
+            container = ctk.CTkFrame(inner, fg_color="transparent")
             container.pack(side="left", padx=10)
             ctk.CTkLabel(container, text=f"x{i+1}:").pack(side="left", padx=2)
             menu = ctk.CTkOptionMenu(container, values=["≥ 0", "Unrestricted"], width=110)
@@ -86,25 +90,34 @@ class InputFrame(ctk.CTkScrollableFrame):
             ctk.CTkLabel(self.obj_frame, text=var_text).grid(row=0, column=3 + (i*2), padx=2)
 
     def add_constraint_row(self):
-        row_frame = ctk.CTkFrame(self.constraints_frame, fg_color="transparent")
-        row_frame.pack(pady=5, anchor="center")
+        scroll = ctk.CTkScrollableFrame(self.constraints_frame, orientation="horizontal", height=50, fg_color="transparent")
+        scroll.pack(pady=5, fill="x")
+        row_frame = ctk.CTkFrame(scroll, fg_color="transparent")
+        row_frame.pack(side="left")
+
         current_row_entries = []
         for i in range(self.num_vars):
             entry = ctk.CTkEntry(row_frame, width=50)
             entry.grid(row=0, column=i*2, padx=2)
             current_row_entries.append(entry)
             var_text = f"x{i+1}" + (" + " if i < self.num_vars - 1 else "")
-            ctk.CTkLabel(row_frame, text=var_text).grid(row=0, column=1 + i*2 , padx=2)
+            ctk.CTkLabel(row_frame, text=var_text).grid(row=0, column=1 + i*2, padx=2)
 
         op_menu = ctk.CTkOptionMenu(row_frame, values=["≤", "≥", "="], width=60)
         op_menu.grid(row=0, column=self.num_vars*2, padx=10)
         rhs_entry = ctk.CTkEntry(row_frame, width=60, placeholder_text="RHS")
         rhs_entry.grid(row=0, column=self.num_vars*2 + 1, padx=2)
-        delete_btn = ctk.CTkButton(row_frame, text="X", width=30, fg_color="#CC3333", 
-                                   hover_color="#AA2222", 
-                                   command=lambda rf=row_frame: self.delete_row(rf))
+        delete_btn = ctk.CTkButton(row_frame, text="X", width=30, fg_color="#CC3333",
+                                   hover_color="#AA2222",
+                                   command=lambda s=scroll: self.delete_row(s))
         delete_btn.grid(row=0, column=self.num_vars*2 + 2, padx=10)
-        self.all_constraints_widgets.append({"frame": row_frame, "entries": current_row_entries, "op": op_menu, "rhs": rhs_entry})
+
+        self.all_constraints_widgets.append({
+            "frame": scroll,
+            "entries": current_row_entries,
+            "op": op_menu,
+            "rhs": rhs_entry
+        })
 
     def delete_row(self, frame_to_delete):
         self.all_constraints_widgets = [r for r in self.all_constraints_widgets if r["frame"] != frame_to_delete]
@@ -135,14 +148,14 @@ class InputFrame(ctk.CTkScrollableFrame):
             solver.solve()
             from src.logger import SimplexLogger
             logger = SimplexLogger(solver)
-            self.output_ref.display_result(logger.to_string())
+            self.output_ref.display_result(logger.to_string(), solver.status, solver.solution)
             
             logger.write("simplex_log.txt")
             self.status_label.configure(text="Solved! Trace shown on the right.", text_color="green")
-            self.status_label.configure(text="Standardization complete!", text_color="green")
             
         except ValueError:
             self.status_label.configure(text="Error: Please ensure all coefficients are numbers.", text_color="red")
+
     def print_model_summary(self):
         print("--- LP MODEL SUMMARY ---")
         print(f"Type: {self.model.obj_type}")
@@ -151,6 +164,7 @@ class InputFrame(ctk.CTkScrollableFrame):
         for i in range(len(self.model.constraints_matrix)):
             print(f"  {self.model.constraints_matrix[i]} {self.model.operators[i]} {self.model.rhs_list[i]}")
         print(f"Variable Types: {self.model.var_types}")
+
     def print_standardized_results(self, out):
         print("\n=== STANDARDIZED TABLEAU DATA ===")
         print(f"Metadata: {out.col_metaData}")
