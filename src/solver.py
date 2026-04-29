@@ -32,7 +32,7 @@ class SimplexSolver:
 
             tableau, basis = self._transition_to_phase2(tableau, basis)
 
-        self._run_phase2(tableau, basis)
+        tableau, basis = self._run_phase2(tableau, basis)
         #solution
         if self.status =="Optimal":
             output_value = tableau[-1,-1]
@@ -122,13 +122,13 @@ class SimplexSolver:
             if entering_column == -1:
                 self.status = "Optimal"
                 self._log(tableau, f"Phase 2 – Optimal Solution Reached")
-                break
+                return None, None
 
             leaving_row = self._get_leaving_variable(tableau,entering_column)
             if leaving_row == -1:
                 self.status = "Unbounded"
                 self._log(tableau, f"Phase 2 – Iteration {iteration} – UNBOUNDED (no leaving row)")
-                return
+                return None, None
 
             tableau = pivot(tableau, leaving_row, entering_column)
             basis[leaving_row] = entering_column
@@ -137,6 +137,8 @@ class SimplexSolver:
             col_name = self._col_name(entering_column)
             self._log(tableau, f"Phase 2 – Iteration {iteration} – Enter: {col_name}, Leave: R{leaving_row+1}")
             iteration += 1
+
+        return tableau, basis
 
     # Build the initial tableau for the standard simplex method
     def _build_tableau(self, has_artificials):
