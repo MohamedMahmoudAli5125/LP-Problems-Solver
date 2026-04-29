@@ -31,17 +31,19 @@ class Standardizer:
         b = np.array(self.model.rhs_list, dtype=float)
         phase1_obj = np.zeros(total_cols)
         phase2_obj = np.zeros(total_cols - artificial_cols)
-        col_metaData = []  
         var_mapping = []
         initial_basis = []
         
+        col_metaData = [""]*total_cols
         
         current_col = 0
         for i in range(self.model.num_vars):
             if self.model.var_types[i] == "Unrestricted":
                 
-                col_metaData.append(f"x{i+1}+")
-                col_metaData.append(f"x{i+1}-")
+                # col_metaData.append(f"x{i+1}+")
+                # col_metaData.append(f"x{i+1}-")
+                col_metaData[current_col] = f"x{i+1}+"
+                col_metaData[current_col + 1] = f"x{i+1}-"
         
                 var_mapping.append((current_col, current_col + 1))
         
@@ -51,7 +53,8 @@ class Standardizer:
 
                 current_col += 2
             else:         
-              col_metaData.append(f"x{i+1}")
+            #   col_metaData.append(f"x{i+1}")
+              col_metaData[current_col] = f"x{i+1}"
               var_mapping.append((current_col,))
         
               phase2_obj[current_col] = self.model.obj_coeffs[i]
@@ -88,25 +91,29 @@ class Standardizer:
 
             if op == "≤":          
                 A[j, current_slack_ptr] = 1
-                col_metaData.append( f"s{j+1}") 
+                # col_metaData.append( f"s{j+1}") 
+                col_metaData[current_slack_ptr] = f"s{j+1}"
                 initial_basis.append(current_slack_ptr)
                 current_slack_ptr += 1
         
             elif op == "≥":
                 A[j, current_slack_ptr] = -1 
-                col_metaData.append( f"s{j+1}")
+                # col_metaData.append( f"s{j+1}")
+                col_metaData[current_slack_ptr] = f"s{j+1}"
                 current_slack_ptr += 1
 
                 A[j, current_art_ptr] = 1   
                 phase1_obj[current_art_ptr] = 1 # only artificial variables in phase 1 obj
-                col_metaData.append( f"a{j+1}")
+                # col_metaData.append( f"a{j+1}")
+                col_metaData[current_art_ptr] = f"a{j+1}"
                 initial_basis.append(current_art_ptr)
                 current_art_ptr += 1
         
             elif op == "=":
                 A[j, current_art_ptr] = 1   
                 phase1_obj[current_art_ptr] = 1 # only artificial variables in phase 1 obj
-                col_metaData.append( f"a{j+1}")
+                    # col_metaData.append( f"a{j+1}")
+                col_metaData[current_art_ptr] = f"a{j+1}"
                 initial_basis.append(current_art_ptr)
                 current_art_ptr += 1
            
