@@ -76,7 +76,7 @@ class SimplexSolver:
             if leaving_row == -1:
                 self.status = "infeasible"
                 self._log(tableau, f"Phase 1 – Iteration {iteration} – INFEASIBLE (no leaving row)", basis)
-                return None, None
+                break
             leave_name = self._col_name(basis[leaving_row])
 
             tableau = pivot(tableau, leaving_row, entering_column)
@@ -91,9 +91,9 @@ class SimplexSolver:
         if abs(tableau[-1][-1])>1e-5:
             self.status = "infeasible"
             self._log(tableau, "Phase 1 – INFEASIBLE (artificial variable remains > 0)", basis)
-            return None, None
-
-        self._log(tableau, "Phase 1 – Complete (feasible BFS found)", basis)
+        else:
+            self._log(tableau, "Phase 1 – Complete (feasible BFS found)", basis)
+            
         return tableau, basis
 
     def _transition_to_phase2(self, tableau, basis):
@@ -125,13 +125,13 @@ class SimplexSolver:
             if entering_column == -1:
                 self.status = "Optimal"
                 self._log(tableau, f"Phase 2 – Optimal Solution Reached", basis)
-                return None, None
+                break
 
             leaving_row = self._get_leaving_variable(tableau,entering_column)
             if leaving_row == -1:
                 self.status = "Unbounded"
                 self._log(tableau, f"Phase 2 – Iteration {iteration} – UNBOUNDED (no leaving row)", basis)
-                return None, None
+                break
             leave_name = self._col_name(basis[leaving_row])
 
             tableau = pivot(tableau, leaving_row, entering_column)
