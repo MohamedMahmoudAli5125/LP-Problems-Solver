@@ -11,19 +11,21 @@ class SimplexSolver:
         self.status = None          # Status of the solution (optimal, infeasible)
         self.steps = []             # Tableau at each iteration
         self.step_labels = []       # Human-readable label per step (parallel to self.steps)
+        self.step_basis = []
         self.solution = {}          # The optimal objective function value and variable values
 
-    def _log(self, tableau: np.ndarray, label: str) -> None:
+    def _log(self, tableau: np.ndarray, label: str , basis: list) -> None:
         self.steps.append(tableau.copy())
         self.step_labels.append(label)
+        self.step_basis.append(basis.copy())
 
     def solve(self):
         has_artificials = np.any(self.std_output.phase1_obj == 1)
         tableau, basis = self._build_tableau(has_artificials)
         if has_artificials:
-            self._log(tableau, "Phase 1 – Initial Tableau (before objective setup)")
+            self._log(tableau, "Phase 1 – Initial Tableau (before objective setup)", basis)
         else:
-            self._log(tableau, "Phase 2 – Initial Tableau")
+            self._log(tableau, "Phase 2 – Initial Tableau", basis)
 
         if has_artificials:
             tableau, basis = self._run_phase1(tableau, basis)
@@ -61,7 +63,7 @@ class SimplexSolver:
 
     def _run_phase1(self, tableau, basis):
         tableau = self._setup_objective(tableau, basis)
-        self._log(tableau, "Phase 1 – After Objective Row Setup")
+        self._log(tableau, "Phase 1 – After Objective Row Setup", basis)
         phase1 = True
         # run simplex iterations for phase 1
         iteration = 1
@@ -73,24 +75,25 @@ class SimplexSolver:
             leaving_row = self._get_leaving_variable(tableau, entering_column)
             if leaving_row == -1:
                 self.status = "infeasible"
-                self._log(tableau, f"Phase 1 – Iteration {iteration} – INFEASIBLE (no leaving row)")
+                self._log(tableau, f"Phase 1 – Iteration {iteration} – INFEASIBLE (no leaving row)", basis)
                 return None, None
+            leave_name = self._col_name(basis[leaving_row])
 
             tableau = pivot(tableau, leaving_row, entering_column)
             basis[leaving_row] = entering_column
             tableau = np.round(tableau, decimals=10)
 
             col_name = self._col_name(entering_column)
-            self._log(tableau, f"Phase 1 – Iteration {iteration} – Enter: {col_name}, Leave: R{leaving_row+1}")
+            self._log(tableau, f"Phase 1 – Iteration {iteration} – Enter: {col_name}, Leave: {leave_name}", basis)
             iteration += 1
 
         # feasibility check
         if abs(tableau[-1][-1])>1e-5:
             self.status = "infeasible"
-            self._log(tableau, "Phase 1 – INFEASIBLE (artificial variable remains > 0)")
+            self._log(tableau, "Phase 1 – INFEASIBLE (artificial variable remains > 0)", basis)
             return None, None
 
-        self._log(tableau, "Phase 1 – Complete (feasible BFS found)")
+        self._log(tableau, "Phase 1 – Complete (feasible BFS found)", basis)
         return tableau, basis
 
     def _transition_to_phase2(self, tableau, basis):
@@ -105,37 +108,38 @@ class SimplexSolver:
         c = np.array(self.std_output.phase2_obj, dtype=float)
         z_row = np.hstack((-c, np.zeros(1)))
         tableau = np.vstack((tableau, z_row))
-        self._log(tableau, "Phase 2 – Initial Tableau (after dropping artificials)")
+        self._log(tableau, "Phase 2 – Initial Tableau (after dropping artificials)", basis)
 
         tableau = self._setup_objective(tableau, basis)
-        self._log(tableau, "Phase 2 – Initial Tableau (after objective setup)")
+        self._log(tableau, "Phase 2 – Initial Tableau (after objective setup)", basis)
         return tableau, basis
 
     def _run_phase2(self, tableau, basis):
        # self.steps.append(tableau.copy())
         if not self.steps or "Phase 2" not in self.step_labels[-1]:
-            self._log(tableau, "Phase 2 – Initial Tableau")
+            self._log(tableau, "Phase 2 – Initial Tableau", basis)
 
         iteration = 1
         while True:
             entering_column = self._get_entering_variable(tableau , phase1=False)
             if entering_column == -1:
                 self.status = "Optimal"
-                self._log(tableau, f"Phase 2 – Optimal Solution Reached")
+                self._log(tableau, f"Phase 2 – Optimal Solution Reached", basis)
                 return None, None
 
             leaving_row = self._get_leaving_variable(tableau,entering_column)
             if leaving_row == -1:
                 self.status = "Unbounded"
-                self._log(tableau, f"Phase 2 – Iteration {iteration} – UNBOUNDED (no leaving row)")
+                self._log(tableau, f"Phase 2 – Iteration {iteration} – UNBOUNDED (no leaving row)", basis)
                 return None, None
+            leave_name = self._col_name(basis[leaving_row])
 
             tableau = pivot(tableau, leaving_row, entering_column)
             basis[leaving_row] = entering_column
             tableau = np.round(tableau, decimals=10)
 
             col_name = self._col_name(entering_column)
-            self._log(tableau, f"Phase 2 – Iteration {iteration} – Enter: {col_name}, Leave: R{leaving_row+1}")
+            self._log(tableau, f"Phase 2 – Iteration {iteration} – Enter: {col_name}, Leave: {leave_name}", basis)
             iteration += 1
 
         return tableau, basis
