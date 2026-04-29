@@ -4,6 +4,8 @@ from .standardizer import Standardizer
 from .utils import pivot
 from .models import LPProblemModel, StandardizerOutput
 
+EPS = 1e-8
+
 class SimplexSolver:
     def __init__(self, model: LPProblemModel, std_output: StandardizerOutput):
         self.model = model
@@ -88,7 +90,7 @@ class SimplexSolver:
             iteration += 1
 
         # feasibility check
-        if abs(tableau[-1][-1])>1e-5:
+        if abs(tableau[-1][-1]) > EPS:
             self.status = "infeasible"
             self._log(tableau, "Phase 1 – INFEASIBLE (artificial variable remains > 0)", basis)
         else:
@@ -172,18 +174,18 @@ class SimplexSolver:
 
         if objective_type == 'max':
             min_val = np.min(z_row)
-            return int(np.argmin(z_row)) if min_val < 0 else -1
+            return int(np.argmin(z_row)) if min_val < -EPS else -1
         else:
             max_val = np.max(z_row)
-            return int(np.argmax(z_row)) if max_val > 0 else -1
-        
+            return int(np.argmax(z_row)) if max_val > EPS else -1
+
     # Determination of the leaving variable
     def _get_leaving_variable(self, tableau, entering_col):
         min_ratio  = float('inf')
         leaving_row = -1
 
         for r in range(len(tableau) - 1):  # Exclude the last row (objective function)
-            if (tableau[r][entering_col] > 0):
+            if (tableau[r][entering_col] > EPS):
                 ratio = tableau[r][-1] / tableau[r][entering_col]
                 if ratio < min_ratio:
                 #print(f"Row {r}: ratio = {ratio}")
