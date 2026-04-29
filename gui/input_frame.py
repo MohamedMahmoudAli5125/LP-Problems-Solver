@@ -130,8 +130,15 @@ class InputFrame(ctk.CTkScrollableFrame):
             std_output = standardizer.standardize()
             self.print_model_summary()
             self.print_standardized_results(std_output)
-
-            self.output_ref.display_ok()
+            from src.solver import SimplexSolver
+            solver = SimplexSolver(self.model, std_output)
+            solver.solve()
+            from src.logger import SimplexLogger
+            logger = SimplexLogger(solver)
+            self.output_ref.display_result(logger.to_string())
+            
+            logger.write("simplex_log.txt")
+            self.status_label.configure(text="Solved! Trace shown on the right.", text_color="green")
             self.status_label.configure(text="Standardization complete!", text_color="green")
             
         except ValueError:
