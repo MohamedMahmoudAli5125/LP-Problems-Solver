@@ -7,7 +7,7 @@ class LPApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         
-        self.title("LP Solver - Split Interface")
+        self.title("LP Solver")
         self.geometry("1100x700")
 
         # self.grid_columnconfigure(0, weight=1) 

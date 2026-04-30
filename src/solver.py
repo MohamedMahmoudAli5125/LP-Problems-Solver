@@ -50,11 +50,22 @@ class SimplexSolver:
             else:
                 final_metadata=self.std_output.col_metaData
 
-            for c , var_name in enumerate(final_metadata):
-                if np.count_nonzero(tableau[:-1,c]) == 1 and np.max(tableau[:-1,c]) == 1:
-                    row = np.where(tableau[:-1,c] == 1)[0][0]
-                    self.solution[var_name] = float(tableau[row,-1])
-                else:
+            # for c , var_name in enumerate(final_metadata):
+            #     if np.count_nonzero(tableau[:-1,c]) == 1 and np.max(tableau[:-1,c]) == 1:
+            #         row = np.where(tableau[:-1,c] == 1)[0][0]
+            #         self.solution[var_name] = float(tableau[row,-1])
+            #     else:
+            #         self.solution[var_name] = 0.0
+                    
+            # get the basic variable values from the basis list
+            for i, col in enumerate(basis):
+                var_name = self._col_name(col)
+                self.solution[var_name] = float(tableau[i,-1])
+                
+            # set the unbasic variables to 0
+            for c in range(tableau.shape[1]-1):
+                if c not in basis:
+                    var_name = self._col_name(c)
                     self.solution[var_name] = 0.0
 
             for i in range(self.model.num_vars):
